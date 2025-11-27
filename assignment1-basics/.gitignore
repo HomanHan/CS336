@@ -163,3 +163,4 @@ cython_debug/
 *.zip
 
 data/
+write_up/test*
