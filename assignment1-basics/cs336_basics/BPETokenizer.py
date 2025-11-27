@@ -1,7 +1,9 @@
+from email.policy import default
 import os
 from typing import BinaryIO
 from multiprocessing import Process, Queue
 import regex as re
+from collections import defaultdict
 
 # 1. Pre-Tokenization:
 #    1.1 chunk the file into parts with boundaries at special tokens <|endoftext|>
@@ -94,7 +96,7 @@ def pre_tokenize_chunk(
     chunk: str,
     special_tokens: list[str] = None,
     drop_special_tokens: bool = True,
-) -> dict[tuple[bytes], int]:
+) -> list[bytes]:
     """
     Pre-tokenize a chunk of text by removing special tokens and counting occurrences.
     Returns a dict of (token, count) tuples.
@@ -104,18 +106,18 @@ def pre_tokenize_chunk(
     
     # 4.2 count tokens in non-special-token parts
     PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    token_counts: dict[tuple[bytes], int] = {}
+    token_counts = []
     for part in parts:
         if part in special_tokens:
             if not drop_special_tokens:
-                token_bytes = tuple(part.encode("utf-8"))
-                token_counts[token_bytes] = token_counts.get(token_bytes, 0) + 1
+                token_bytes = part.encode("utf-8")
+                token_counts.append(token_bytes)
         else:
             # Pre-tokenize
             pre_tokens = re.findall(PATTERN, part)
             for token in pre_tokens:
-                token_bytes = tuple(token.encode("utf-8"))
-                token_counts[token_bytes] = token_counts.get(token_bytes, 0) + 1
+                token_bytes = token.encode("utf-8")
+                token_counts.append(token_bytes)
     return token_counts
 
 def worker(
@@ -128,6 +130,8 @@ def worker(
     """
     token_counts = pre_tokenize_chunk(chunk, special_tokens)
     queue.put(token_counts)
+
+
 
 def train_bpe(
     intput_path: str,
@@ -178,22 +182,53 @@ def train_bpe(
 
     # 4. pre-tokenize the chunks (remove special tokens) parallelized
     processes = []
-    pre_tokens: dict[tuple[bytes], int] = {}
+    pre_tokens = []
     q = Queue()
     for chunk in chunks:
         p = Process(target=worker, args=(chunk, special_tokens, q))
         processes.append(p)
         p.start()
 
-    for _ in processes:
-        token_counts = q.get()
-        for token, count in token_counts.items():
-            pre_tokens[token] = pre_tokens.get(token, 0) + count
+    # Collect pre-tokenization results from all processes
+    pre_token_lists = [q.get() for _ in processes]
     
     for p in processes:
         p.join()
+    
+    pre_tokens = [token for sublist in pre_token_lists for token in sublist]
 
     # 5. train BPE on the pre-tokenized chunks
+    # 5.1 全局统计一次 bytes pair 出现次数
+    counts = defaultdict(int)
+    counts_idx = defaultdict(set)
+
+    for i, token in enumerate(pre_tokens):
+        for token1, token2 in zip(token[:-1], token[1:]):
+            counts[(token1, token2)] += 1 # {(int, int): int}
+            counts_idx[(token1, token2)].add(i) # {(int, int): set(int)} # 记录在哪个单词中，要不要记录在单词中的偏移？
+
+    while len(vocab) < vocab_size:
+        if not counts:
+            break
+        
+        # 5.2 找到出现次数最多的 bytes pair。如果次数相同，选择字典序最大的合并
+        best_pair = max(    # 使用最大堆维护最大值？
+            counts.items(),
+            key=lambda x: (
+                x[1],
+                vocab[x[0][0]].decode("utf-8", errors="ignore"),
+                vocab[x[0][1]].decode("utf-8", errors="ignore")
+            )
+        )[0]
+
+        # 5.3 将该 bytes pair 合并为一个新的 token，加入 vocab
+        new_token = vocab[best_pair[0]] + vocab[best_pair[1]]
+        vocab[len(vocab)] = new_token
+        merges.append(best_pair)
+
+        # 5.4 更新 pre_tokens 和 counts 频率
+        merge(best_pair, new_token, pre_tokens, counts, counts_idx, vocab)
+
     
 
 
