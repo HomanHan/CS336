@@ -1,6 +1,6 @@
 from email.policy import default
 import os
-from typing import BinaryIO
+from typing import BinaryIO, Iterator, Iterable
 from multiprocessing import Process, Queue
 import regex as re
 from collections import defaultdict
@@ -303,3 +303,103 @@ def train_bpe(
         merge(counts, counts_idx, pre_tokens, best_pair, len(vocab) - 1)
 
     return vocab, merges
+
+
+class BPETokenizer:
+    def __init__(
+        self,
+        vocab: dict[int, bytes],
+        merges: list[tuple[bytes, bytes]],
+        special_tokens: list[str] | None = None,
+    ):
+        self.vocab = vocab
+        self.merges = merges
+        self.special_tokens = special_tokens or []
+
+    @classmethod
+    def from_files(
+        cls,
+        vocab_filepath: str,
+        merges_filepath: str,
+        special_tokens: list[str] | None = None,
+    ):
+        """
+        Classmethod that constructs and return a Tokenizer
+        from a serialized vocabulary and list of merges and (optionally) a list of special tokens.
+        """
+        raise NotImplementedError
+
+    def encode(self, text: str) -> list[int]:
+        """
+        Encode an input text into a sequence of token IDs.
+        """
+
+        vocab_reverse = {v: k for k, v in self.vocab.items()}
+        special_token_bytes = [
+            token.encode("utf-8") for token in self.special_tokens
+        ]  # Convert special tokens to bytes
+
+        # 1. Pre-tokenize
+        pre_tokens = pre_tokenize_chunk(
+            text, self.special_tokens, drop_special_tokens=False
+        )  # list[bytes]
+
+        # 1.1 map pre-tokens to IDs
+        pre_tokens_ids = []  # list[list[int]]
+        for pretoken in pre_tokens:
+            token_list = []
+            if pretoken in special_token_bytes:
+                token_list.append(
+                    vocab_reverse[pretoken]
+                )  # Special tokens are already in vocab
+            else:
+                # Convert pre-token to IDs
+                token_list = [vocab_reverse[bytes([x])] for x in pretoken]
+            pre_tokens_ids.append(token_list)
+
+        # 2. Apply BPE merges
+        # 2.1 对每一个 merge，遍历每个 pre-token 内是否可以使用该 merge
+        for pretoken in pre_tokens_ids:
+            for merge in self.merges:
+                new_token = []
+                for i in range(len(pretoken)):
+                    if (
+                        i < len(pretoken) - 1
+                        and (self.vocab[pretoken[i]], self.vocab[pretoken[i + 1]])
+                        == merge
+                    ):
+                        new_token.append(vocab_reverse[merge[0] + merge[1]])
+                        i += 1  # Skip the next token since it's merged
+                    else:
+                        new_token.append(pretoken[i])
+                pretoken[:] = new_token  # Update the pretoken in place
+
+        # 2.2 Flatten the list of pre-tokens into a single list of IDs
+        token_ids = [x for sublist in pre_tokens_ids for x in sublist]
+        return token_ids
+
+    def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        """
+        Given an iterable of strings (e.g., a Python file handle),
+        return a generator that lazily yields token IDs.
+        """
+        for text in iterable:
+            yield from self.encode(text)
+
+    def decode(self, ids: list[int]) -> str:
+        """
+        Decode a sequence of token IDs into text.
+        """
+        replace_char = "\ufffd"
+        tokens = bytes()
+
+        for token in ids:
+            if token in self.vocab:
+                tokens += self.vocab[token]
+            else:
+                # If the token is not in the vocab, replace it with a placeholder
+                tokens += replace_char.encode("utf-8")  # Use U+FFFD as a placeholder
+
+        return tokens.decode(
+            "utf-8", errors="replace"
+        )  # Use 'replace' to handle decoding errors
