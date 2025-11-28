@@ -316,28 +316,46 @@ class BPETokenizer:
         self.merges = merges
         self.special_tokens = special_tokens or []
 
+        self.vocab_reverse = {v: k for k, v in self.vocab.items()}
+        self.special_token_bytes = [
+            token.encode("utf-8") for token in self.special_tokens
+        ]  # Convert special tokens to bytes
+        for token in self.special_token_bytes:
+            if token not in self.vocab_reverse:
+                new_id = len(self.vocab)
+                self.vocab[new_id] = token
+                self.vocab_reverse[token] = new_id
+
+    # From https://github.com/heng380/cs336-assignment1/blob/main/cs336_basics/Tokenizer/BPE_tokenizer.py#L208
     @classmethod
     def from_files(
         cls,
         vocab_filepath: str,
         merges_filepath: str,
         special_tokens: list[str] | None = None,
-    ):
-        """
-        Classmethod that constructs and return a Tokenizer
-        from a serialized vocabulary and list of merges and (optionally) a list of special tokens.
-        """
-        raise NotImplementedError
+    ) -> "BPETokenizer":
+        import json
+
+        with open(vocab_filepath, "r") as vf:
+            vocab_data = json.load(vf)
+            vocab = {int(i): bytes(v, "latin1") for v, i in vocab_data.items()}
+
+        merges = []
+        with open(merges_filepath, "r") as mf:
+            for line in mf:
+                if line.strip() and not line.startswith("#"):
+                    parts = line.strip().split()
+                    if len(parts) == 2:
+                        merges.append(
+                            (bytes(parts[0], "latin1"), bytes(parts[1], "latin1"))
+                        )
+
+        return cls(vocab, merges, special_tokens)
 
     def encode(self, text: str) -> list[int]:
         """
         Encode an input text into a sequence of token IDs.
         """
-
-        vocab_reverse = {v: k for k, v in self.vocab.items()}
-        special_token_bytes = [
-            token.encode("utf-8") for token in self.special_tokens
-        ]  # Convert special tokens to bytes
 
         # 1. Pre-tokenize
         pre_tokens = pre_tokenize_chunk(
@@ -348,13 +366,13 @@ class BPETokenizer:
         pre_tokens_ids = []  # list[list[int]]
         for pretoken in pre_tokens:
             token_list = []
-            if pretoken in special_token_bytes:
+            if pretoken in self.special_token_bytes:
                 token_list.append(
-                    vocab_reverse[pretoken]
+                    self.vocab_reverse[pretoken]
                 )  # Special tokens are already in vocab
             else:
                 # Convert pre-token to IDs
-                token_list = [vocab_reverse[bytes([x])] for x in pretoken]
+                token_list = [self.vocab_reverse[bytes([x])] for x in pretoken]
             pre_tokens_ids.append(token_list)
 
         # 2. Apply BPE merges
@@ -362,16 +380,17 @@ class BPETokenizer:
         for pretoken in pre_tokens_ids:
             for merge in self.merges:
                 new_token = []
-                for i in range(len(pretoken)):
-                    if (
-                        i < len(pretoken) - 1
-                        and (self.vocab[pretoken[i]], self.vocab[pretoken[i + 1]])
-                        == merge
+                i = 0
+
+                while i < len(pretoken):
+                    if (i < len(pretoken) - 1) and (
+                        (self.vocab[pretoken[i]], self.vocab[pretoken[i + 1]]) == merge
                     ):
-                        new_token.append(vocab_reverse[merge[0] + merge[1]])
-                        i += 1  # Skip the next token since it's merged
+                        new_token.append(self.vocab_reverse[merge[0] + merge[1]])
+                        i += 2  # Skip the next token since it's merged
                     else:
                         new_token.append(pretoken[i])
+                        i += 1
                 pretoken[:] = new_token  # Update the pretoken in place
 
         # 2.2 Flatten the list of pre-tokens into a single list of IDs
