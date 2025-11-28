@@ -103,7 +103,7 @@ def pre_tokenize_chunk(
     drop_special_tokens: bool = True,
 ) -> list[
     bytes
-]:  # 为了方便后面的 BPE 训练（统计 count 和 count_idx），返回 list 而不是 dict{token, count}
+]:  # 为了方便后面的 BPE Encode 复用，选择一种简单的策略，返回 list 而不是 dict{token, count}。后者本可以在 Training 中更加高效（统计 Pairs 频率时乘上系数即可）
     """
     Pre-tokenize a chunk of text by removing special tokens and counting occurrences.
     Returns a list of bytes tokens.
