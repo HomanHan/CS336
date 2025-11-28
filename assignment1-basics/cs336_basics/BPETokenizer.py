@@ -101,15 +101,17 @@ def pre_tokenize_chunk(
     chunk: str,
     special_tokens: list[str] = [],
     drop_special_tokens: bool = True,
-) -> list[bytes]:
+) -> list[
+    bytes
+]:  # 为了方便后面的 BPE 训练（统计 count 和 count_idx），返回 list 而不是 dict{token, count}
     """
     Pre-tokenize a chunk of text by removing special tokens and counting occurrences.
-    Returns a dict of (token, count) tuples.
+    Returns a list of bytes tokens.
     """
     # 4.1 split by special tokens
     parts = split_special_token(chunk, special_tokens)
 
-    # 4.2 count tokens in non-special-token parts
+    # 4.2 collect Pre-tokens in non-special-token parts
     PATTERN = (
         r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     )
@@ -198,9 +200,10 @@ def merge(
 
 
 def train_bpe(
-    intput_path: str,
+    input_path: str | os.PathLike,
     vocab_size: int,
-    special_tokens: list[str] = [],
+    special_tokens: list[str],
+    **kwargs,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     """
     Train a BPE tokenizer on the input file.
@@ -233,7 +236,7 @@ def train_bpe(
     num_processes = 4
     chunks = []
     # 3. read the file and find chunk boundaries
-    with open(intput_path, "rb") as f:
+    with open(input_path, "rb") as f:
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         # The following is a serial implementation, but you can parallelize this
