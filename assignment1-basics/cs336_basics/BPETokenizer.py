@@ -320,6 +320,7 @@ class BPETokenizer:
         self.special_token_bytes = [
             token.encode("utf-8") for token in self.special_tokens
         ]  # Convert special tokens to bytes
+
         for token in self.special_token_bytes:
             if token not in self.vocab_reverse:
                 new_id = len(self.vocab)
@@ -376,22 +377,61 @@ class BPETokenizer:
             pre_tokens_ids.append(token_list)
 
         # 2. Apply BPE merges
-        # 2.1 对每一个 merge，遍历每个 pre-token 内是否可以使用该 merge
-        for pretoken in pre_tokens_ids:
-            for merge in self.merges:
-                new_token = []
-                i = 0
 
-                while i < len(pretoken):
-                    if (i < len(pretoken) - 1) and (
-                        (self.vocab[pretoken[i]], self.vocab[pretoken[i + 1]]) == merge
-                    ):
-                        new_token.append(self.vocab_reverse[merge[0] + merge[1]])
-                        i += 2  # Skip the next token since it's merged
-                    else:
-                        new_token.append(pretoken[i])
-                        i += 1
-                pretoken[:] = new_token  # Update the pretoken in place
+        # 2.1 对每一个 merge，遍历每个 pre-token 内是否可以使用该 merge
+        # for pretoken in pre_tokens_ids:
+        #     for merge in self.merges:
+        #         new_token = []
+        #         i = 0
+
+        #         while i < len(pretoken):
+        #             if (i < len(pretoken) - 1) and (
+        #                 (self.vocab[pretoken[i]], self.vocab[pretoken[i + 1]]) == merge
+        #             ):
+        #                 new_token.append(self.vocab_reverse[merge[0] + merge[1]])
+        #                 i += 2  # Skip the next token since it's merged
+        #             else:
+        #                 new_token.append(pretoken[i])
+        #                 i += 1
+        #         pretoken[:] = new_token  # Update the pretoken in place
+
+        # 2.2 只遍历存在的 merges
+        # 2.2.1 定义一个函数来获取当前 pre-token 中的相邻 token 对
+        pairs = lambda w: set(
+            (self.vocab[w[i]], self.vocab[w[i + 1]]) for i in range(len(w) - 1)
+        )
+        for pretoken in pre_tokens_ids:
+            flag = True
+            i = 0
+            while flag and i < len(self.merges):
+                # 2.2.2 先行探索一下是否有可以 merge 的对
+                candidate_pairs = pairs(pretoken)
+                new_token = []
+
+                flag = False
+                while i < len(self.merges):
+                    if self.merges[i] in candidate_pairs:
+                        flag = True
+                        merge = self.merges[i]
+
+                        # 2.2.3 找到了，合并
+                        j = 0
+                        while j < len(pretoken):
+                            if (
+                                (j < len(pretoken) - 1)
+                                and self.vocab[pretoken[j]] == merge[0]
+                                and self.vocab[pretoken[j + 1]] == merge[1]
+                            ):
+                                new_token.append(
+                                    self.vocab_reverse[merge[0] + merge[1]]
+                                )
+                                j += 2
+                            else:
+                                new_token.append(pretoken[j])
+                                j += 1
+                        pretoken[:] = new_token  # Update the pretoken in place
+                        break
+                    i += 1
 
         # 2.2 Flatten the list of pre-tokens into a single list of IDs
         token_ids = [x for sublist in pre_tokens_ids for x in sublist]
