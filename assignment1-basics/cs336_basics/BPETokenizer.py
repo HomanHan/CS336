@@ -5,13 +5,6 @@ from multiprocessing import Process, Queue
 import regex as re
 from collections import defaultdict
 
-# 1. Pre-Tokenization:
-#    1.1 chunk the file into parts with boundaries at special tokens <|endoftext|>
-#    1.2 read each chunk and run pre-tokenization on it. use `multiprocessing` to parallelize this.
-# 2. Train BPE:
-#    2.1 remove special tokens
-#    2.2 train BPE on the pre-tokenized chunks
-
 
 def find_chunk_boundaries(
     file: BinaryIO,
@@ -97,13 +90,13 @@ def split_special_token(
         return re.split(pattern, chunk)
 
 
+# 为了方便后面的 BPE Encode 复用，选择一种简单的策略，返回 list 而不是 dict{token, count}。
+# 后者本可以在 Training 中更加高效（统计 Pairs 频率时乘上系数即可）
 def pre_tokenize_chunk(
     chunk: str,
     special_tokens: list[str] = [],
     drop_special_tokens: bool = True,
-) -> list[
-    bytes
-]:  # 为了方便后面的 BPE Encode 复用，选择一种简单的策略，返回 list 而不是 dict{token, count}。后者本可以在 Training 中更加高效（统计 Pairs 频率时乘上系数即可）
+) -> list[bytes]:
     """
     Pre-tokenize a chunk of text by removing special tokens and counting occurrences.
     Returns a list of bytes tokens.
