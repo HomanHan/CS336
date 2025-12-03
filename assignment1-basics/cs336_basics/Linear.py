@@ -27,7 +27,9 @@ class Linear(nn.Module):
         self.weight = nn.Parameter(
             torch.empty((out_features, in_features), device=device, dtype=dtype)
         )
-        nn.init.trunc_normal_(self.weight, mean=0, std=sigma, a=-3*sigma, b=3*sigma) # 初始化一个张量为截断正态分布
+        nn.init.trunc_normal_(
+            self.weight, mean=0, std=sigma, a=-3 * sigma, b=3 * sigma
+        )  # 初始化一个张量为截断正态分布
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
