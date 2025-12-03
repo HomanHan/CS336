@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import einops
 
 
 class Embedding(nn.Module):
@@ -32,10 +31,4 @@ class Embedding(nn.Module):
         Lookup the embedding vectors for the given token IDs.
         """
 
-        return torch.Tensor(
-            [
-                [self.embedding[token_ids[i, j]] for j in range(token_ids.shape[1])]
-                for i in range(token_ids.shape[0])
-            ],
-            device=token_ids.device,
-        )  # TODO: replace with actual implementation
+        return self.embedding[token_ids]
