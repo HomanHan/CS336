@@ -37,6 +37,7 @@ python-preference = "managed"
 log_cli = true
 log_cli_level = "WARNING"
 addopts = "-s"
+norecursedirs = ["write_up"]
 
 [tool.ruff]
 line-length = 120
