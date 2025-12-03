@@ -8,8 +8,8 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import BPETokenizer
-from cs336_basics import Linear
+
+from cs336_basics import BPETokenizer, Linear
 
 
 def run_linear(
@@ -32,7 +32,7 @@ def run_linear(
     """
 
     model = Linear.Linear(d_in, d_out)
-    model.weight.data = weights
+    model.load_state_dict({"weight": weights})
     return model(in_features)
 
 
