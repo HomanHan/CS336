@@ -9,7 +9,7 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
-from cs336_basics import BPETokenizer, Linear, Embedding, Normalization
+from cs336_basics import BPETokenizer, Linear, Embedding, Normalization, PositionWiseFFN
 
 
 def run_linear(
@@ -88,7 +88,15 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    model = PositionWiseFFN.PositionWiseFFN(d_model, d_ff)
+    model.load_state_dict(
+        {
+            "w1.weight": w1_weight,
+            "w2.weight": w2_weight,
+            "w3.weight": w3_weight,
+        }
+    )
+    return model(in_features)
 
 
 def run_scaled_dot_product_attention(
