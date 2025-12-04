@@ -62,6 +62,7 @@ class RoPE(nn.Module):
         x_even = x[..., ::2]
         x_odd = x[..., 1::2]
 
+        # 原理见 https://kexue.fm/archives/8265 3.编码形式
         rot_even = x_even * cos - x_odd * sin
         rot_odd = x_even * sin + x_odd * cos
 
