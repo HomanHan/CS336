@@ -9,7 +9,14 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
-from cs336_basics import BPETokenizer, Linear, Embedding, Normalization, PositionWiseFFN
+from cs336_basics import (
+    BPETokenizer,
+    Linear,
+    Embedding,
+    Normalization,
+    PositionWiseFFN,
+    RoPE,
+)
 
 
 def run_linear(
@@ -213,7 +220,9 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+
+    model = RoPE.RoPE(theta, d_k, max_seq_len, device=in_query_or_key.device)
+    return model(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -391,7 +400,7 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    
+
     model = Normalization.RMSNorm(d_model, eps)
     model.load_state_dict({"scale": weights})
     return model(in_features)

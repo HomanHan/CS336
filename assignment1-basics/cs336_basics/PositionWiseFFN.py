@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import einops
 from cs336_basics.Linear import Linear
 
 
