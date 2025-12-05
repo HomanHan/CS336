@@ -18,7 +18,7 @@ from cs336_basics import (
     RoPE,
     SDPA,
     MultiheadSelfAtten,
-    Transformer
+    Transformer,
 )
 
 
@@ -161,11 +161,17 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    model = MultiheadSelfAtten.causal_multihead_self_attention(d_model, num_heads, with_rope=False)
-    model.load_state_dict({
-        'W_qkv.weight': torch.cat([q_proj_weight, k_proj_weight, v_proj_weight], dim=0),
-        'W_o.weight': o_proj_weight,
-    })
+    model = MultiheadSelfAtten.causal_multihead_self_attention(
+        d_model, num_heads, with_rope=False
+    )
+    model.load_state_dict(
+        {
+            "W_qkv.weight": torch.cat(
+                [q_proj_weight, k_proj_weight, v_proj_weight], dim=0
+            ),
+            "W_o.weight": o_proj_weight,
+        }
+    )
     return model(in_features)
 
 
@@ -206,11 +212,22 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    model = MultiheadSelfAtten.causal_multihead_self_attention(d_model, num_heads, with_rope=True, max_seq_len=max_seq_len, theta=theta, token_positions=token_positions)
-    model.load_state_dict({
-        'W_qkv.weight': torch.cat([q_proj_weight, k_proj_weight, v_proj_weight], dim=0),
-        'W_o.weight': o_proj_weight,
-    })
+    model = MultiheadSelfAtten.causal_multihead_self_attention(
+        d_model,
+        num_heads,
+        with_rope=True,
+        max_seq_len=max_seq_len,
+        theta=theta,
+        token_positions=token_positions,
+    )
+    model.load_state_dict(
+        {
+            "W_qkv.weight": torch.cat(
+                [q_proj_weight, k_proj_weight, v_proj_weight], dim=0
+            ),
+            "W_o.weight": o_proj_weight,
+        }
+    )
     return model(in_features)
 
 
@@ -317,15 +334,24 @@ def run_transformer_block(
     )
 
     # load weights
-    model.load_state_dict({
-        'attention.W_qkv.weight': torch.cat([weights['attn.q_proj.weight'], weights['attn.k_proj.weight'], weights['attn.v_proj.weight']], dim=0),
-        'attention.W_o.weight': weights['attn.output_proj.weight'],
-        'norm1.scale': weights['ln1.weight'],
-        'feed_forward.w1.weight': weights['ffn.w1.weight'],
-        'feed_forward.w2.weight': weights['ffn.w2.weight'],
-        'feed_forward.w3.weight': weights['ffn.w3.weight'],
-        'norm2.scale': weights['ln2.weight'],
-    })
+    model.load_state_dict(
+        {
+            "attention.W_qkv.weight": torch.cat(
+                [
+                    weights["attn.q_proj.weight"],
+                    weights["attn.k_proj.weight"],
+                    weights["attn.v_proj.weight"],
+                ],
+                dim=0,
+            ),
+            "attention.W_o.weight": weights["attn.output_proj.weight"],
+            "norm1.scale": weights["ln1.weight"],
+            "feed_forward.w1.weight": weights["ffn.w1.weight"],
+            "feed_forward.w2.weight": weights["ffn.w2.weight"],
+            "feed_forward.w3.weight": weights["ffn.w3.weight"],
+            "norm2.scale": weights["ln2.weight"],
+        }
+    )
     return model(in_features)
 
 
@@ -408,7 +434,66 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    model = Transformer.TransformerLM(
+        vocab_size, context_length, num_layers, d_model, num_heads, d_ff, rope_theta
+    )
+
+    model.load_state_dict(
+        {
+            "embedding.embedding": weights["token_embeddings.weight"],
+            **{
+                f"layers.{layer_idx}.attention.W_qkv.weight": torch.cat(
+                    [
+                        weights[f"layers.{layer_idx}.attn.q_proj.weight"],
+                        weights[f"layers.{layer_idx}.attn.k_proj.weight"],
+                        weights[f"layers.{layer_idx}.attn.v_proj.weight"],
+                    ],
+                    dim=0,
+                )
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.attention.W_o.weight": weights[
+                    f"layers.{layer_idx}.attn.output_proj.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.norm1.scale": weights[
+                    f"layers.{layer_idx}.ln1.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.feed_forward.w1.weight": weights[
+                    f"layers.{layer_idx}.ffn.w1.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.feed_forward.w2.weight": weights[
+                    f"layers.{layer_idx}.ffn.w2.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.feed_forward.w3.weight": weights[
+                    f"layers.{layer_idx}.ffn.w3.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            **{
+                f"layers.{layer_idx}.norm2.scale": weights[
+                    f"layers.{layer_idx}.ln2.weight"
+                ]
+                for layer_idx in range(num_layers)
+            },
+            "output_layer.weight": weights["lm_head.weight"],
+            "norm.scale": weights["ln_final.weight"],
+        }
+    )
+
+    return model(in_indices)
 
 
 def run_rmsnorm(
