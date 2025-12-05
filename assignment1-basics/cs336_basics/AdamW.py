@@ -75,3 +75,33 @@ class AdamW(torch.optim.Optimizer):
                 state["v"] = v
                 state["step"] = t
         return loss
+
+
+def learning_rate_schedule(
+    it: int,
+    max_learning_rate: float,
+    min_learning_rate: float,
+    warmup_iters: int,
+    cosine_cycle_iters: int,
+):
+    """
+    Computes the learning rate at iteration `it` using a warmup and cosine decay schedule.
+    Args:
+        it (int): Current iteration number.
+        max_learning_rate (float): Maximum learning rate.
+        min_learning_rate (float): Minimum learning rate.
+        warmup_iters (int): Number of warmup iterations.
+        cosine_cycle_iters (int): Number of iterations for one cosine decay cycle.
+    Returns:
+        float: The computed learning rate.
+    """
+    if it < warmup_iters:
+        lr = max_learning_rate * (it / warmup_iters)
+    elif it <= cosine_cycle_iters:
+        it_in_cycle = it - warmup_iters
+        lr = min_learning_rate + 0.5 * (max_learning_rate - min_learning_rate) * (
+            1 + math.cos(math.pi * it_in_cycle / (cosine_cycle_iters - warmup_iters))
+        )
+    else:
+        lr = min_learning_rate
+    return lr
