@@ -18,6 +18,7 @@ from cs336_basics import (
     RoPE,
     SDPA,
     MultiheadSelfAtten,
+    Transformer
 )
 
 
@@ -307,7 +308,25 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    model = Transformer.TransformerBlock(
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        max_seq_len=max_seq_len,
+        theta=theta,
+    )
+
+    # load weights
+    model.load_state_dict({
+        'attention.W_qkv.weight': torch.cat([weights['attn.q_proj.weight'], weights['attn.k_proj.weight'], weights['attn.v_proj.weight']], dim=0),
+        'attention.W_o.weight': weights['attn.output_proj.weight'],
+        'norm1.scale': weights['ln1.weight'],
+        'feed_forward.w1.weight': weights['ffn.w1.weight'],
+        'feed_forward.w2.weight': weights['ffn.w2.weight'],
+        'feed_forward.w3.weight': weights['ffn.w3.weight'],
+        'norm2.scale': weights['ln2.weight'],
+    })
+    return model(in_features)
 
 
 def run_transformer_lm(
