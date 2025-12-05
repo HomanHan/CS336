@@ -19,6 +19,7 @@ from cs336_basics import (
     SDPA,
     MultiheadSelfAtten,
     Transformer,
+    Loss
 )
 
 
@@ -590,7 +591,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    
+    return Loss.cross_entropy_loss(inputs, targets)
 
 
 def run_gradient_clipping(
