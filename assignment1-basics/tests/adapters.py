@@ -19,7 +19,8 @@ from cs336_basics import (
     SDPA,
     MultiheadSelfAtten,
     Transformer,
-    Loss
+    Loss,
+    AdamW,
 )
 
 
@@ -613,7 +614,7 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return AdamW.AdamW
 
 
 def run_get_lr_cosine_schedule(
