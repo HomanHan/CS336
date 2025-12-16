@@ -87,6 +87,7 @@ class TransformerLM(nn.Module):
         )
         self.output_layer = Linear.Linear(d_model, vocab_size)
         self.norm = Normalization.RMSNorm(d_model)
+        self.context_length = context_length
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -100,5 +101,7 @@ class TransformerLM(nn.Module):
         for layer in self.layers:
             x = layer(x)  # (batch_size, seq_len, d_model)
         x = self.norm(x)  # (batch_size, seq_len, d_model)
-        logits = self.output_layer(x)  # (batch_size, seq_len, vocab_size) # no softmax here
+        logits = self.output_layer(
+            x
+        )  # (batch_size, seq_len, vocab_size) # no softmax here
         return logits
