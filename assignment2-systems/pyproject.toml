@@ -17,6 +17,7 @@ dependencies = [
     "wandb>=0.19.7",
     "pandas>=2",
     "ty>=0.0.1a16",
+    "setuptools>=80.9.0",
 ]
 
 [build-system]
