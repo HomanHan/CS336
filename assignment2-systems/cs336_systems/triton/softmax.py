@@ -10,7 +10,7 @@ def triton_softmax(x: torch.Tensor):
     M, N = x.shape  # Number of rows x number of columns
     block_size = triton.next_power_of_2(
         N
-    )  # Each block contains all the columns, 对每一行做 softmax
+    )  # Each block contains all the columns, 对每一行做softmax
     num_blocks = M  # Each block is a row
     # Launch kernel
     triton_softmax_kernel[(M,)](
