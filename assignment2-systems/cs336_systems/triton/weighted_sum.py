@@ -104,6 +104,30 @@ def weighted_sum_fwd(
     )
 
 
+# TODO: implement backward pass
+@triton.jit
+def weighted_sum_backward(
+    x_ptr,
+    weight_ptr,  # Input
+    grad_output_ptr,  # Grad input
+    grad_x_ptr,
+    partial_grad_weight_ptr,  # Grad outputs
+    stride_xr,
+    stride_xd,
+    stride_wd,
+    stride_gr,
+    stride_gxr,
+    stride_gxd,
+    stride_gwb,
+    stride_gwd,
+    NUM_ROWS,
+    D,
+    ROWS_TILE_SIZE: tl.constexpr,
+    D_TILE_SIZE: tl.constexpr,
+):
+    raise NotImplementedError("Backward pass not implemented yet")
+
+
 class WeightedSumFunc(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight) -> torch.Tensor:
@@ -114,7 +138,7 @@ class WeightedSumFunc(torch.autograd.Function):
 
         # Reshape input tensor to 2D [*, D]，铺平到二维
         input_shape = x.shape
-        x = einops.rearrange(x, "... d -> (...) d") # e.g. (2, 3, 4) -> (6, 4)
+        x = einops.rearrange(x, "... d -> (...) d")  # e.g. (2, 3, 4) -> (6, 4)
         ctx.save_for_backward(x, weight)
         assert len(weight.shape) == 1 and weight.shape[0] == D, "Dimension mismatch"
         assert x.is_cuda and weight.is_cuda, "Expected CUDA tensors"
@@ -147,17 +171,29 @@ class WeightedSumFunc(torch.autograd.Function):
             D_TILE_SIZE=ctx.D_TILE_SIZE,
         )
         print("shape of y in weighted_sum_fwd:", y.shape)
-        return y.view(input_shape[:-1]) # view 会调整 shape，保证输出 y 与输入 x[:-1] 的形状一致
+        return y.view(
+            input_shape[:-1]
+        )  # view 会调整 shape，保证输出 y 与输入 x[:-1] 的形状一致
+
+    # TODO: implement backward pass
+    @staticmethod
+    def backward(ctx, grad_out):
+        raise NotImplementedError("Backward pass not implemented yet")
 
 
-x = torch.randn(96, 128)
+x = torch.randn(32, 96, 128)
+# 为什么数量级较小的时候会 floating point exception? e.g. (2, 4)
+# A1: line 139 `ctx.D_TILE_SIZE = (triton.next_power_of_2(D) // 16)` 当 D 较小时会变成 0，导致后续 cdiv(D, D_TILE_SIZE) 出现除以 0 的错误
+
 weights = torch.randn(128)
 
-result = WeightedSumFunc.apply(x.cuda(), weights.cuda())
-print("result shape:", result.shape)
-print("result:", result)
-
+# torch implementation
 print("x:", x)
 print("weights:", weights)
 print("shape:", weighted_sum(x, weights).shape)
 print("weighted sum:", weighted_sum(x, weights))
+
+# triton implementation
+result = WeightedSumFunc.apply(x.cuda(), weights.cuda())
+print("result shape:", result.shape)
+print("result:", result)
