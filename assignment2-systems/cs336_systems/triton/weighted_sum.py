@@ -170,7 +170,6 @@ class WeightedSumFunc(torch.autograd.Function):
             ROWS_TILE_SIZE=ctx.ROWS_TILE_SIZE,
             D_TILE_SIZE=ctx.D_TILE_SIZE,
         )
-        print("shape of y in weighted_sum_fwd:", y.shape)
         return y.view(
             input_shape[:-1]
         )  # view 会调整 shape，保证输出 y 与输入 x[:-1] 的形状一致
