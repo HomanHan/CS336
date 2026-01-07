@@ -64,7 +64,65 @@ class FlashAttentionFunc_pytorch(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        raise NotImplementedError("FlashAttention backward pass not implemented yet")
+        Q, K, V, output, L = ctx.saved_tensors
+        device = Q.device
+
+        dQ = torch.zeros_like(Q, device=device)
+        dK = torch.zeros_like(K, device=device)
+        dV = torch.zeros_like(V, device=device)
+
+        # dimensions
+        B, N_q, D = Q.shape
+        N_k = K.shape[1]
+        scale = 1.0 / (D**0.5)
+
+        # backward kernel implementation in just PyTorch
+        # return dQ, dK, dV
+        @torch.compile
+        def flash_bwd_kernel(Q, K, V, output, L, grad_output, is_causal):
+            Q = Q.float()
+            K = K.float()
+            V = V.float()
+            O = output.float()
+            dO = grad_output.float()
+
+            # D = rowsum of O * dO
+            D = torch.sum(O * dO, dim=-1)  # (B, N_q)
+
+            # recompute, S = Q @ K^T / sqrt(d)
+            S = torch.einsum("bqd,bkd->bqk", Q, K) * scale  # (B, N_q, N_k)
+
+            if is_causal:
+                mask = torch.triu(torch.ones_like(S), diagonal=1).bool()
+                S = S.masked_fill(mask, float("-inf"))
+
+            # P = exp(S - L)
+            P = torch.exp(S - L.unsqueeze(-1))  # (B, N_q, N_k)
+
+            # dV = P^T @ dO
+            dV = torch.einsum("bqk,bqd->bkd", P, dO)  # (B, N_k, D)
+
+            # dP = dO @ V^T
+            dP = torch.einsum("bqd,bkd->bqk", dO, V)  # (B, N_q, N_k)
+
+            # dS = P * (dP - D.unsqueeze(-1))
+            dS = P * (dP - D.unsqueeze(-1))  # (B, N_q, N_k)
+
+            # dQ = dS @ K / sqrt(d)
+            dQ = torch.einsum("bqk,bkd->bqd", dS, K) * scale  # (B, N_q, D)
+
+            # dK = dS^T @ Q / sqrt(d)
+            dK = torch.einsum("bqk,bqd->bkd", dS, Q) * scale  # (B, N_k, D)
+
+            return dQ, dK, dV
+
+        dQ, dK, dV = flash_bwd_kernel(Q, K, V, output, L, grad_output, ctx.is_causal)
+
+        dQ = dQ.to(Q.dtype)
+        dK = dK.to(K.dtype)
+        dV = dV.to(V.dtype)
+
+        return dQ, dK, dV, None
 
 
 @triton.jit
@@ -244,4 +302,62 @@ class FlashAttentionFunc_triton(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        raise NotImplementedError("FlashAttention backward pass not implemented yet")
+        Q, K, V, output, L = ctx.saved_tensors
+        device = Q.device
+
+        dQ = torch.zeros_like(Q, device=device)
+        dK = torch.zeros_like(K, device=device)
+        dV = torch.zeros_like(V, device=device)
+
+        # dimensions
+        B, N_q, D = Q.shape
+        N_k = K.shape[1]
+        scale = 1.0 / (D**0.5)
+
+        # backward kernel implementation in just PyTorch
+        # return dQ, dK, dV
+        @torch.compile
+        def flash_bwd_kernel(Q, K, V, output, L, grad_output, is_causal):
+            Q = Q.float()
+            K = K.float()
+            V = V.float()
+            O = output.float()
+            dO = grad_output.float()
+
+            # D = rowsum of O * dO
+            D = torch.sum(O * dO, dim=-1)  # (B, N_q)
+
+            # recompute, S = Q @ K^T / sqrt(d)
+            S = torch.einsum("bqd,bkd->bqk", Q, K) * scale  # (B, N_q, N_k)
+
+            if is_causal:
+                mask = torch.triu(torch.ones_like(S), diagonal=1).bool()
+                S = S.masked_fill(mask, float("-inf"))
+
+            # P = exp(S - L)
+            P = torch.exp(S - L.unsqueeze(-1))  # (B, N_q, N_k)
+
+            # dV = P^T @ dO
+            dV = torch.einsum("bqk,bqd->bkd", P, dO)  # (B, N_k, D)
+
+            # dP = dO @ V^T
+            dP = torch.einsum("bqd,bkd->bqk", dO, V)  # (B, N_q, N_k)
+
+            # dS = P * (dP - D.unsqueeze(-1))
+            dS = P * (dP - D.unsqueeze(-1))  # (B, N_q, N_k)
+
+            # dQ = dS @ K / sqrt(d)
+            dQ = torch.einsum("bqk,bkd->bqd", dS, K) * scale  # (B, N_q, D)
+
+            # dK = dS^T @ Q / sqrt(d)
+            dK = torch.einsum("bqk,bqd->bkd", dS, Q) * scale  # (B, N_k, D)
+
+            return dQ, dK, dV
+
+        dQ, dK, dV = flash_bwd_kernel(Q, K, V, output, L, grad_output, ctx.is_causal)
+
+        dQ = dQ.to(Q.dtype)
+        dK = dK.to(K.dtype)
+        dV = dV.to(V.dtype)
+
+        return dQ, dK, dV, None
